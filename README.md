@@ -1,6 +1,7 @@
 # Minesweeper in c
 
 Example output:
+
  Mine: ```X```
 ```
 ------------

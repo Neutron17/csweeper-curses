@@ -5,6 +5,9 @@
 #include <errno.h>
 #include <string.h>
 #include <time.h>
+#include "args.h"
+#include "errors.h"
+#include "common.h"
 
 #define MINE 'X'
 
@@ -28,9 +31,11 @@ int countNeighbours(Board_t board, uint8_t x, uint8_t y);
 
 int main(int argc, char *argv[]) {
 	srand(time(NULL));
-	Board_t board = createBoard(10, 10);
+	struct Args args = parseArgs(argc, argv);
 
-	spawnMines(&board, 7);
+	Board_t board = createBoard(args.w, args.h);
+
+	spawnMines(&board, args.m);
 
 	for(int y = 0; y < board.h; y++) {
 		for(int x = 0; x < board.w; x++) {
@@ -44,7 +49,7 @@ int main(int argc, char *argv[]) {
 	printBoard(board);
 
 	destroyBoard(&board);
-	return 0;
+	return E_SUCC;
 }
 
 void spawnMines(Board_t *board, size_t count) {
@@ -112,6 +117,7 @@ char *getFieldAt_ref(const Board_t *board, uint8_t w, uint8_t h) {
 void setFieldAt(Board_t *board, uint8_t w, uint8_t h, char v) {
 	board->fields[h * board->w + w] = v;
 }
+
 void printBoard(Board_t board) {
 	for(int i = 0; i < board.w + 2; i++)
 		printf("-");
