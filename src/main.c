@@ -30,9 +30,9 @@ Board_t createBoard(uint8_t w, uint8_t h);
 void destroyBoard(Board_t *board);
 
 // Board manipulation
-char getField(Board_t board, uint8_t w, uint8_t h);
-char *getField_ref(const Board_t *board, uint8_t w, uint8_t h);
-void setFieldAt(Board_t *board, uint8_t w, uint8_t h, char v);
+char getField(Board_t board, uint8_t x, uint8_t y);
+char *getField_ref(const Board_t *board, uint8_t x, uint8_t y);
+void setField(Board_t *board, uint8_t x, uint8_t y, char v);
 
 void printBoard(Board_t board);
 void spawnMines(Board_t *board, size_t count);
@@ -70,7 +70,7 @@ int main(int argc, char *argv[]) {
 			if(getField(board, x, y) == MINE)
 				continue;
 			if(countNeighbours(board, x, y) > 0) {
-				setFieldAt(&board, x, y, '0' + countNeighbours(board, x, y));
+				setField(&board, x, y, '0' + countNeighbours(board, x, y));
 			}
 		}
 	}
@@ -224,18 +224,18 @@ void destroyBoard(Board_t *board) {
 	board->fields = NULL;
 }
 
-char getField(Board_t board, uint8_t w, uint8_t h) {
-	if(w >= board.w || h >= board.h)
+char getField(Board_t board, uint8_t x, uint8_t y) {
+	if(x >= board.w || y >= board.h)
 		return ' ';
-	return board.fields[h * board.w + w];
+	return board.fields[y * board.w + x];
 }
-char *getField_ref(const Board_t *board, uint8_t w, uint8_t h) {
-	return &board->fields[h * board->w + w];
+char *getField_ref(const Board_t *board, uint8_t x, uint8_t y) {
+	return &board->fields[y * board->w + x];
 }
-void setFieldAt(Board_t *board, uint8_t w, uint8_t h, char v) {
-	if(w >= board->w || h >= board->h)
+void setField(Board_t *board, uint8_t x, uint8_t y, char v) {
+	if(x >= board->w || y >= board->h)
 		return;
-	board->fields[h * board->w + w] = v;
+	board->fields[y * board->w + x] = v;
 }
 
 void printBoard(Board_t board) {
