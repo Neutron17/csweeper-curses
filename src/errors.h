@@ -4,6 +4,7 @@
 enum ErrType {
 	E_SUCC,
 	E_ARG,
+	E_ALLOC,
 	E_UNKNOWN
 };
 
