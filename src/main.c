@@ -10,6 +10,8 @@
 #include "errors.h"
 #include "common.h"
 
+#include <ncurses.h>
+
 #define MINE 'X'
 #define CLOSED 'C'
 
@@ -54,7 +56,7 @@ void printBoard(Board board);
 void spawnMines(Board *board, size_t count);
 int countNeighbours(Board board, uint8_t x, uint8_t y);
 void clearBoard(Board *board);
-enum CmdType parseInput(const char *input);
+enum CmdType parseInput(char input);
 /* returns: true: fail, false: success */
 bool handleInput(enum CmdType type, Board *board);
 
@@ -71,6 +73,7 @@ bool isDebug = false;
 */
 
 int main(int argc, char *argv[]) {
+
 	srand(time(NULL));
 	struct Args args = parseArgs(argc, argv);
 	isDebug = args.isDebug;
@@ -91,30 +94,33 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	bool running = true;
-	char inpBuff[16];
+	char input;
 
+	initscr();
+	cbreak();
+	clear();
 	while(running) {
+		clear();
 		printBoard(board);
 inp:;
-    		printf("> ");
-		fflush(stdout);
+		input = getch();
 		//int c = fgetc(stdin);
-		if(fgets(inpBuff, 15, stdin) == NULL) {
-			fprintf(stderr, "ERROR: Error while getting input\n");
-			goto cleanUp;
-		}
-		enum CmdType type = parseInput(inpBuff);
+
+		enum CmdType type = parseInput(input);
 		switch(type) {
 			case C_QUIT:
 				running = false;
 				break;
 			case C_SELECT:
 				if(board.cells[board.cursorPtr].isOpen) {
-					// TODO
+					if(board.cells[board.cursorPtr].isMine) {
+						printw("GAME OVER, press any key\n");
+						running = false;
+					}
 				} else { // not open
 					board.cells[board.cursorPtr].isOpen = true;
 					if(board.cells[board.cursorPtr].isMine) {
-						printf("GAME OVER\n");
+						printw("GAME OVER, press any key\n");
 						running = false;
 					}
 				}
@@ -124,7 +130,10 @@ inp:;
 					goto inp;
 				break;
 		}
+		refresh();
 	}
+	getch();
+	endwin();
 cleanUp:;
 	if(isDebug)
 		puts("DEBUG: Cleaning up");
@@ -137,17 +146,17 @@ cleanUp:;
 bool handleInput(enum CmdType type, Board *board) {
 	switch(type) {
 		case C_HELP:
-			printf("%s", cmdHelp);
+			printw("%s", cmdHelp);
 			break;
 		case C_ERR:
-			fprintf(stderr, "ERROR: error while getting input\n");
+			printw("ERROR: error while getting input\n");
 			break;
 		case C_NONE:
 			return true;
 			break;
 		case C_UNKNOWN:
-			fprintf(stderr, "ERROR: Unknown command\n");
-			printf("%s", cmdHelp);
+			printw("ERROR: Unknown command\n");
+			printw("%s", cmdHelp);
 			return true;
 			break;
 
@@ -172,51 +181,30 @@ bool handleInput(enum CmdType type, Board *board) {
 	return false;
 }
 
-enum CmdType parseInput(const char *input) {
-	if(input == NULL)
-		return C_ERR;
-	else if(*input == '\n')
+enum CmdType parseInput(char input) {
+	if(input == '\n')
 		return C_SELECT;
-	char b[16];
-	strncpy(b, input, 16);
-	char *buff = &b[0];
 
-	while(isspace(*buff))
-		buff++;
-
-	if(*buff == '\0' || strnlen(buff, 16) < 2)
+	if(input == '\0')
 		return C_NONE;
-	if(strnlen(buff, 16) == 2) {
-		switch(*buff) {
-			case 'q':
-				return C_QUIT;
-			case '?':
-			case'h':
-				return C_HELP;
-			case 'w':
-				return C_UP;
-			case 'a':
-				return C_LEFT;
-			case 's':
-				return C_DOWN;
-			case 'd':
-				return C_RIGHT;
-
-			/*case EOF:
-				return C_ERR;*/
-			default:
-				return C_UNKNOWN;
-		}
-	} else {
-		if(strncasecmp(buff, "help", 4) == 0) {
+	switch(input) {
+		case 'q':
+			return C_QUIT;
+		case '?':
+		case'h':
 			return C_HELP;
-		} else if (strncasecmp(buff, "quit", 4) == 0) {
-			return C_QUIT;
-		} else if (strncasecmp(buff, "exit", 4) == 0) {
-			return C_QUIT;
-		} else {
+		case 'w':
+			return C_UP;
+		case 'a':
+			return C_LEFT;
+		case 's':
+			return C_DOWN;
+		case 'd':
+			return C_RIGHT;
+		/*case EOF:
+			return C_ERR;*/
+		default:
 			return C_UNKNOWN;
-		}
 	}
 	return C_ERR;
 }
@@ -297,32 +285,34 @@ void setCell(Board *board, uint8_t x, uint8_t y, Cell v) {
 }
 
 void printBoard(Board board) {
-	for(int i = 0; i < board.w + 2; i++)
-		printf("-");
-	puts("");
-	for(int y = 0; y < board.h; y++) {
-		printf("|");
-		for(int x = 0; x < board.w; x++) {
-			if((y*board.w + x) == board.cursorPtr) {
-				printf("P");
+	for(int i = 0; i < board.w + 1; i++)
+		mvaddch(0, i, '-');
+	printf("\n");
+	for(int y = 1; y < board.h; y++) {
+		mvaddch(y, 0,'|');
+		for(int x = 1; x < board.w; x++) {
+			if(((y-1)*board.w + x-1) == board.cursorPtr) {
+				mvaddch(y,x,'P');
 				continue;
 			}
-			Cell c = getCell(board, x, y);
+			Cell c = getCell(board, x-1, y-1);
 			if(c.isMine) {
-				printf("%c", MINE);
+				mvaddch(y,x,MINE);
 			} else if(!c.isOpen) {
-				printf("%c", CLOSED);
+				mvaddch(y,x,CLOSED);
 			} else if(c.value == 0) {
-				printf(" ");
+				mvaddch(y,x,' ');
 			} else {
-				printf("%d", c.value);
+				mvaddch(y,x, '0' + c.value);
 			}
-			//printf("%c", getCell(board, x, y).value);
+			//printw("%c", getCell(board, x, y).value);
 		}
-		puts("|");
+		mvaddch(y,board.w,'|');
+
 	}
-	for(int i = 0; i < board.w + 2; i++)
-		printf("-");
-	puts("");
+	for(int i = 0; i < board.w + 1; i++)
+		mvaddch(board.h, i, '-');
+	mvaddch(board.h, board.w+1, '\r');
+	mvaddch(board.h, board.w+2, '\n');
 }
 

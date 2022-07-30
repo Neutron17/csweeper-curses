@@ -15,6 +15,7 @@ CCFLAGS += -Wall
 CCFLAGS += -pedantic
 
 LDFLAGS  = $(INCFLAGS)
+LDFLAGS += -lncurses
 
 INSTALL_PATH = /usr/local/bin
 
