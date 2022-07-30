@@ -15,11 +15,10 @@ CCFLAGS += -Wall
 CCFLAGS += -pedantic
 
 LDFLAGS  = $(INCFLAGS)
-LDFLAGS += -lm
 
 INSTALL_PATH = /usr/local/bin
 
-all: build
+all: clean build
 
 run: build
 	$(BIN)/mine $*

@@ -1,4 +1,3 @@
-#include <bits/strcasecmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -12,37 +11,52 @@
 #include "common.h"
 
 #define MINE 'X'
+#define CLOSED 'C'
+
+typedef struct {
+	uint8_t value;
+	bool isMine;
+	bool isOpen;
+} Cell;
 
 typedef struct {
 	uint8_t w, h;
-	char *fields;
-} Board_t;
+	int cursorPtr;
+	Cell *cells;
+	//char *cells;
+} Board;
 
 enum CmdType {
 	C_QUIT,
 	C_HELP,
 	C_NONE,
 	C_ERR,
-	C_UNKNOWN
+	C_UNKNOWN,
+
+	C_UP,
+	C_DOWN,
+	C_LEFT,
+	C_RIGHT,
+	C_SELECT
 };
 
-Board_t createBoard(uint8_t w, uint8_t h);
-void destroyBoard(Board_t *board);
+Board createBoard(uint8_t w, uint8_t h);
+void destroyBoard(Board *board);
 
 // Board manipulation
-char getField(Board_t board, uint8_t x, uint8_t y);
-char *getField_ref(const Board_t *board, uint8_t x, uint8_t y);
-void setField(Board_t *board, uint8_t x, uint8_t y, char v);
+Cell getCell(Board board, uint8_t x, uint8_t y);
+Cell getCell_checked(Board board, uint8_t x, uint8_t y);
+Cell *getCell_ref(const Board *board, uint8_t x, uint8_t y);
+void setCell_checked(Board *board, uint8_t x, uint8_t y, Cell v);
+void setCell(Board *board, uint8_t x, uint8_t y, Cell v);
 
-void printBoard(Board_t board);
-void spawnMines(Board_t *board, size_t count);
-int countNeighbours(Board_t board, uint8_t x, uint8_t y);
-void clearBoard(Board_t *board);
+void printBoard(Board board);
+void spawnMines(Board *board, size_t count);
+int countNeighbours(Board board, uint8_t x, uint8_t y);
+void clearBoard(Board *board);
 enum CmdType parseInput(const char *input);
-/*
- * returns: true: fail, false: success
-*/
-bool handleInput(enum CmdType type);
+/* returns: true: fail, false: success */
+bool handleInput(enum CmdType type, Board *board);
 
 const char *cmdHelp =
 	"Minesweeper - command help\n"
@@ -52,7 +66,7 @@ bool isDebug = false;
 
 
 /* TODO
- * fox double printig "> " with invalid input
+ * fox double printing "> " with invalid input
  *
 */
 
@@ -61,21 +75,24 @@ int main(int argc, char *argv[]) {
 	struct Args args = parseArgs(argc, argv);
 	isDebug = args.isDebug;
 
-	Board_t board = createBoard(args.w, args.h);
+	Board board = createBoard(args.w, args.h);
 
 	spawnMines(&board, args.m);
 
 	for(int y = 0; y < board.h; y++) {
 		for(int x = 0; x < board.w; x++) {
-			if(getField(board, x, y) == MINE)
+			if(getCell(board, x, y).isMine)
 				continue;
 			if(countNeighbours(board, x, y) > 0) {
-				setField(&board, x, y, '0' + countNeighbours(board, x, y));
+				setCell(&board, x, y,
+					(Cell) { countNeighbours(board, x, y), false, true }
+				);
 			}
 		}
 	}
 	bool running = true;
 	char inpBuff[16];
+
 	while(running) {
 		printBoard(board);
 inp:;
@@ -91,8 +108,19 @@ inp:;
 			case C_QUIT:
 				running = false;
 				break;
+			case C_SELECT:
+				if(board.cells[board.cursorPtr].isOpen) {
+					// TODO
+				} else { // not open
+					board.cells[board.cursorPtr].isOpen = true;
+					if(board.cells[board.cursorPtr].isMine) {
+						printf("GAME OVER\n");
+						running = false;
+					}
+				}
+				break;
 			default:
-				if(handleInput(type))
+				if(handleInput(type, &board))
 					goto inp;
 				break;
 		}
@@ -106,13 +134,12 @@ cleanUp:;
 	return E_SUCC;
 }
 
-bool handleInput(enum CmdType type) {
+bool handleInput(enum CmdType type, Board *board) {
 	switch(type) {
 		case C_HELP:
 			printf("%s", cmdHelp);
 			break;
 		case C_ERR:
-			/*Unreachable*/
 			fprintf(stderr, "ERROR: error while getting input\n");
 			break;
 		case C_NONE:
@@ -123,6 +150,21 @@ bool handleInput(enum CmdType type) {
 			printf("%s", cmdHelp);
 			return true;
 			break;
+
+		case C_UP:
+			board->cursorPtr -= board->w;
+			break;
+		case C_DOWN:
+			board->cursorPtr += board->w;
+			break;
+		case C_LEFT:
+			board->cursorPtr--;
+			break;
+		case C_RIGHT:
+			board->cursorPtr++;
+			break;
+
+		case C_SELECT:
 		case C_QUIT:
 			// Unreachable
 			break;
@@ -133,15 +175,15 @@ bool handleInput(enum CmdType type) {
 enum CmdType parseInput(const char *input) {
 	if(input == NULL)
 		return C_ERR;
+	else if(*input == '\n')
+		return C_SELECT;
 	char b[16];
 	strncpy(b, input, 16);
 	char *buff = &b[0];
-	int shift = 0;
 
-	while(isspace(*buff)) {
+	while(isspace(*buff))
 		buff++;
-		shift++;
-	}
+
 	if(*buff == '\0' || strnlen(buff, 16) < 2)
 		return C_NONE;
 	if(strnlen(buff, 16) == 2) {
@@ -151,6 +193,15 @@ enum CmdType parseInput(const char *input) {
 			case '?':
 			case'h':
 				return C_HELP;
+			case 'w':
+				return C_UP;
+			case 'a':
+				return C_LEFT;
+			case 's':
+				return C_DOWN;
+			case 'd':
+				return C_RIGHT;
+
 			/*case EOF:
 				return C_ERR;*/
 			default:
@@ -170,82 +221,103 @@ enum CmdType parseInput(const char *input) {
 	return C_ERR;
 }
 
-void spawnMines(Board_t *board, size_t count) {
+void spawnMines(Board *board, size_t count) {
 	if(count > (board->h*board->w))
 		return;
 	for(size_t i = 0; i < count; i++) {
 up:;
 		int rnd = rand() % (board->h * board->w);
-		if(board->fields[rnd] == MINE)
+		if(board->cells[rnd].isMine)
 			goto up;
-		board->fields[rnd] = MINE;
+		board->cells[rnd].isMine = true;
 	}
 }
 
-int countNeighbours(Board_t board, uint8_t x, uint8_t y) {
+int countNeighbours(Board board, uint8_t x, uint8_t y) {
 	int count = 0;
 	if(x < board.w) {
-		if(getField(board, x+1, y) == MINE) count++;
+		if(getCell_checked(board, x+1, y).isMine) count++;
 		if(y < board.h)
-			if(getField(board, x+1, y+1) == MINE) count++;
+			if(getCell_checked(board, x+1, y+1).isMine) count++;
 		if(y > 0)
-			if(getField(board, x+1, y-1) == MINE) count++;
+			if(getCell_checked(board, x+1, y-1).isMine) count++;
 	}
 	if(x > 0) {
-		if(getField(board, x-1, y) == MINE) count++;
+		if(getCell(board, x-1, y).isMine) count++;
 		if(y < board.h)
-			if(getField(board, x-1, y+1) == MINE) count++;
+			if(getCell(board, x-1, y+1).isMine) count++;
 		if(y > 0)
-			if(getField(board, x-1, y-1) == MINE) count++;
+			if(getCell(board, x-1, y-1).isMine) count++;
 	}
 	if(y < board.h)
-		if(getField(board, x, y+1) == MINE) count++;
+		if(getCell(board, x, y+1).isMine) count++;
 	if(y > 0)
-		if(getField(board, x, y-1) == MINE) count++;
+		if(getCell(board, x, y-1).isMine) count++;
 	return count;
 }
 
-Board_t createBoard(uint8_t w, uint8_t h) {
-	Board_t ret = {
+Board createBoard(uint8_t w, uint8_t h) {
+	Board ret = {
 		w, h,
-		(char *) calloc(sizeof(char), w * h)
+		0,
+		(Cell *) calloc(sizeof(Cell), w * h)
 	};
-	if(!ret.fields) {
+	if(!ret.cells) {
 		fprintf(stderr, "ERROR: Couldn't allocate for board, '%s'\n",
 				strerror(errno));
 		exit(E_ALLOC);
 	}
-	memset(ret.fields, ' ', w*h);
+	//memset(ret.cells, (Cell){ 0, false, false }, w*h);
 	return ret;
 }
 
-void destroyBoard(Board_t *board) {
-	free(board->fields);
-	board->fields = NULL;
+void destroyBoard(Board *board) {
+	free(board->cells);
+	board->cells = NULL;
 }
 
-char getField(Board_t board, uint8_t x, uint8_t y) {
+Cell getCell_checked(Board board, uint8_t x, uint8_t y) {
 	if(x >= board.w || y >= board.h)
-		return ' ';
-	return board.fields[y * board.w + x];
+		return (Cell){ 0,false,false };
+	return board.cells[y * board.w + x];
 }
-char *getField_ref(const Board_t *board, uint8_t x, uint8_t y) {
-	return &board->fields[y * board->w + x];
+Cell getCell(Board board, uint8_t x, uint8_t y) {
+	return board.cells[y * board.w + x];
 }
-void setField(Board_t *board, uint8_t x, uint8_t y, char v) {
+Cell *getCell_ref(const Board *board, uint8_t x, uint8_t y) {
+	return &board->cells[y * board->w + x];
+}
+void setCell_checked(Board *board, uint8_t x, uint8_t y, Cell v) {
 	if(x >= board->w || y >= board->h)
 		return;
-	board->fields[y * board->w + x] = v;
+	board->cells[y * board->w + x] = v;
+}
+void setCell(Board *board, uint8_t x, uint8_t y, Cell v) {
+	board->cells[y * board->w + x] = v;
 }
 
-void printBoard(Board_t board) {
+void printBoard(Board board) {
 	for(int i = 0; i < board.w + 2; i++)
 		printf("-");
 	puts("");
 	for(int y = 0; y < board.h; y++) {
 		printf("|");
 		for(int x = 0; x < board.w; x++) {
-			printf("%c", getField(board, x, y));
+			if((y*board.w + x) == board.cursorPtr) {
+				printf("P");
+				continue;
+			}
+			Cell c = getCell(board, x, y);
+			if(c.isMine) {
+				printf("%c", MINE);
+			} else if(!c.isOpen) {
+				printf("%c", CLOSED);
+			} else if(c.value == 0) {
+				printf(" ");
+			} else {
+				printf("%d", c.value);
+			}
+			//printf("%c", getCell(board, x, y).value);
 		}
 		puts("|");
 	}
