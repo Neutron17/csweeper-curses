@@ -1,4 +1,6 @@
-# Minesweeper in c
+# Minesweeper in c with ncurses
+
+Forked from [csweeper](https://github.com/Neutron17/csweeper)
 
 Example output:
 
